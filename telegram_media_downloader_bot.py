@@ -10,7 +10,7 @@ from telegram.error import TelegramError
 API_TOKEN = '7824028526:AAHGTpnJrtBWHv3Tz_Iub2XG7oCjPJiUHVU'
 
 # Temporary download path
-TEMP_DOWNLOAD_FOLDER = r'C:\Users\'
+TEMP_DOWNLOAD_FOLDER = r'C:\Users\\'
 
 # Telegram size limit (50 MB)
 TELEGRAM_MAX_SIZE_MB = 50
