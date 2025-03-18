@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
 from telegram.error import TelegramError
 
 # API Token for the bot (obtained from @BotFather)
-API_TOKEN = 'YOUR-API-TOKEN'
+API_TOKEN = '7824028526:AAHGTpnJrtBWHv3Tz_Iub2XG7oCjPJiUHVU'
 
 # Temporary download path
 TEMP_DOWNLOAD_FOLDER = r'C:\Users\'
