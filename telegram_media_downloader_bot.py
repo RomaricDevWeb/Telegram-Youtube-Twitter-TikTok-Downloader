@@ -2,33 +2,32 @@ import os
 import subprocess
 import yt_dlp
 import asyncio
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.error import TelegramError
 
-# API Token for the bot (obtained from @BotFather)
+# API Token for the bot (obtenu via @BotFather)
 API_TOKEN = '7824028526:AAHGTpnJrtBWHv3Tz_Iub2XG7oCjPJiUHVU'
 
-# Temporary download path
+# Chemin temporaire pour les téléchargements (attention à bien échapper la barre oblique finale)
 TEMP_DOWNLOAD_FOLDER = r'C:\Users\\'
 
-# Telegram size limit (50 MB)
+# Limite de taille pour Telegram (50 MB)
 TELEGRAM_MAX_SIZE_MB = 50
 
-# Function to handle real-time download progress
+# Gestion de la progression du téléchargement en temps réel
 async def download_progress(d, message):
     if d['status'] == 'downloading':
         percentage = d.get('downloaded_bytes', 0) / d.get('total_bytes', 1) * 100
-        # Update the progress by editing the same message
-        if int(percentage) % 10 == 0:  # Update every 10% to avoid too many edits
-            await message.edit_text(f"Download progress: {percentage:.2f}%")
+        # Mise à jour du message toutes les 10%
+        if int(percentage) % 10 == 0:
+            await message.edit_text(f"🔄 Progression du téléchargement : {percentage:.2f}%")
     elif d['status'] == 'finished':
-        await message.edit_text("Download complete, processing file...")
+        await message.edit_text("✅ Téléchargement terminé, traitement du fichier...")
 
-# Function to download videos or audios (YouTube, Twitter/X, and TikTok)
+# Téléchargement de vidéos ou audios (YouTube, Twitter/X, TikTok)
 async def download_video(url, destination_folder, message, format="video"):
     try:
-        # Determine the format
         if format == "audio":
             format_type = 'bestaudio/best'
             ext = 'mp3'
@@ -36,119 +35,141 @@ async def download_video(url, destination_folder, message, format="video"):
             format_type = 'best'
             ext = 'mp4'
 
-        # yt-dlp configuration with progress_hooks
         options = {
-            'outtmpl': f'{destination_folder}/%(id)s.%(ext)s',  # Use the video ID to avoid filename issues
-            'format': format_type,  # Select the format based on user input
-            'restrictfilenames': True,  # Limit special characters
-            'progress_hooks': [lambda d: asyncio.create_task(download_progress(d, message))],  # Hook to show real-time progress
+            'outtmpl': f'{destination_folder}/%(id)s.%(ext)s',
+            'format': format_type,
+            'restrictfilenames': True,
+            'progress_hooks': [lambda d: asyncio.create_task(download_progress(d, message))],
         }
 
-        # Download the video or audio
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([url])
         return True
     except Exception as e:
-        print(f"Error during download: {e}")
+        print(f"Erreur pendant le téléchargement : {e}")
         return False
 
-# Function to reduce video quality if it's too large using ffmpeg
+# Réduction de la qualité avec ffmpeg en cas de dépassement de la taille limite
 def reduce_quality_ffmpeg(video_path, output_path, target_size_mb=50):
     try:
-        # Command to reduce video quality using ffmpeg
         command = [
             'ffmpeg', '-i', video_path,
-            '-b:v', '500k',  # Adjust the video bitrate (can be modified as needed)
-            '-vf', 'scale=iw/2:ih/2',  # Reduce resolution by half
-            '-c:a', 'aac',  # Encode audio with AAC
-            '-b:a', '128k',  # Adjust the audio bitrate
+            '-b:v', '500k',
+            '-vf', 'scale=iw/2:ih/2',
+            '-c:a', 'aac',
+            '-b:a', '128k',
             output_path
         ]
-
-        # Execute the ffmpeg command
         subprocess.run(command, check=True)
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Error reducing video quality with ffmpeg: {e}")
+        print(f"Erreur lors de la réduction avec ffmpeg : {e}")
         return False
 
-# Function to handle the /start command
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Send a YouTube, Twitter/X, or TikTok link using /download <url>.\n'
-                                    'If the file is larger than 50 MB, the quality will be reduced to send it.')
+# Handler pour le bouton inline d'aide
+async def button_handler(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+    help_message = (
+        "💡 **Aide sur la commande /download** 💡\n\n"
+        "Utilisation : `/download <url> [audio]`\n"
+        "Exemples :\n"
+        "  • `/download https://youtu.be/dQw4w9WgXcQ`\n"
+        "  • `/download https://youtu.be/dQw4w9WgXcQ audio`\n\n"
+        "Cette commande permet de télécharger une vidéo ou un audio depuis :\n"
+        "  • YouTube\n"
+        "  • Twitter/X\n"
+        "  • TikTok\n\n"
+        "Si le fichier téléchargé dépasse 50 MB, le bot réduit automatiquement "
+        "la qualité pour respecter la limite imposée par Telegram."
+    )
+    await query.edit_message_text(help_message, parse_mode="Markdown")
 
-# Function to handle the /download command with format options
+# Handler de la commande /start avec un message d'accueil futuriste détaillé
+async def start(update: Update, context: CallbackContext):
+    keyboard = [[InlineKeyboardButton("💾 Télécharger", callback_data='download_help')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    futuristic_message = (
+        "╔════════════════════════════════════════════════════════╗\n"
+        "║             🤖 BIENVENUE DANS LE FUTUR 🤖              ║\n"
+        "║                                                        ║\n"
+        "║  Je suis votre Bot Téléchargeur Hyper-Tech, capable de   ║\n"
+        "║  récupérer des vidéos et audios depuis :               ║\n"
+        "║    • YouTube                                           ║\n"
+        "║    • Twitter/X                                         ║\n"
+        "║    • TikTok                                            ║\n"
+        "║                                                        ║\n"
+        "║  Commande principale :                                 ║\n"
+        "║    /download <url> [audio]                             ║\n"
+        "║                                                        ║\n"
+        "║  Exemple :                                             ║\n"
+        "║    /download https://youtu.be/dQw4w9WgXcQ audio        ║\n"
+        "║                                                        ║\n"
+        "║  Si le fichier téléchargé dépasse 50 MB, le bot ajuste   ║\n"
+        "║  automatiquement la qualité pour respecter la limite.  ║\n"
+        "║                                                        ║\n"
+        "║         🚀 Embarquez vers un monde digital avancé !    ║\n"
+        "╚════════════════════════════════════════════════════════╝\n"
+        "\n"
+        "Appuyez sur le bouton ci-dessous pour obtenir plus d'informations."
+    )
+    await update.message.reply_text(futuristic_message, reply_markup=reply_markup)
+
+# Handler de la commande /download
 async def download(update: Update, context: CallbackContext):
     try:
-        # Extract the text sent after the command
         message_text = update.message.text
-
-        # Check if the message contains a valid URL from YouTube, Twitter/X, or TikTok
         if any(domain in message_text for domain in ["https://www.youtube.com/", "https://youtu.be/", "https://twitter.com/", "https://x.com/", "https://www.tiktok.com/"]):
             params = message_text.split(" ")
-            url = params[1]  # Extract the URL after the command
+            url = params[1]
             format = "video" if len(params) < 3 or params[2].lower() != "audio" else "audio"
-            destination_folder = TEMP_DOWNLOAD_FOLDER  # Use the temporary download folder
+            destination_folder = TEMP_DOWNLOAD_FOLDER
 
-            # Send the initial message and keep it for updates
-            message = await update.message.reply_text(f'Starting the {format} download from: {url}')
+            message = await update.message.reply_text(f"🛠️ Démarrage du téléchargement {format} pour : {url}")
 
-            # Start the download and update the same message
             success_download = await download_video(url, destination_folder, message, format)
 
             if not success_download:
-                await message.edit_text('Error during the video download. Please try again later.')
+                await message.edit_text("❌ Erreur lors du téléchargement. Veuillez réessayer plus tard.")
                 return
 
-            # Get the name of the downloaded file
             video_filename = max([os.path.join(destination_folder, f) for f in os.listdir(destination_folder)], key=os.path.getctime)
-
-            # Check the file size
             file_size_mb = os.path.getsize(video_filename) / (1024 * 1024)
             if file_size_mb > TELEGRAM_MAX_SIZE_MB:
-                await message.edit_text(f'The file is too large ({file_size_mb:.2f} MB). '
-                                        f'Reducing the quality to meet the 50 MB limit...')
+                await message.edit_text(f"⚠️ Fichier trop volumineux ({file_size_mb:.2f} MB).\nRéduction de la qualité en cours...")
 
-                # Attempt to reduce the quality using ffmpeg
                 output_filename = os.path.join(destination_folder, 'compressed_' + os.path.basename(video_filename))
                 success_reduce = reduce_quality_ffmpeg(video_filename, output_filename, TELEGRAM_MAX_SIZE_MB)
 
                 if not success_reduce:
-                    await message.edit_text('Error reducing the video quality. Please try again later.')
+                    await message.edit_text("❌ Erreur lors de la réduction de la qualité. Veuillez réessayer plus tard.")
                     return
 
-                # Switch to the compressed file for sending
                 video_filename = output_filename
 
-            # Send the video/audio file to the user
-            await message.edit_text(f'Sending the {format}...')
+            await message.edit_text(f"📤 Envoi du {format}...")
             try:
                 await update.message.reply_video(video=open(video_filename, 'rb'))
             except TelegramError as e:
-                await message.edit_text(f'Error sending the file: {e}')
-                print(f"Error sending the file: {e}")
+                await message.edit_text(f"❌ Erreur lors de l'envoi du fichier : {e}")
+                print(f"Erreur lors de l'envoi du fichier : {e}")
             finally:
-                # Delete the downloaded file (optional)
                 if os.path.exists(video_filename):
                     os.remove(video_filename)
         else:
-            await update.message.reply_text('Please provide a valid YouTube, Twitter/X, or TikTok URL.')
-
+            await update.message.reply_text("Veuillez fournir une URL valide provenant de YouTube, Twitter/X ou TikTok.")
     except Exception as e:
-        await update.message.reply_text('An unexpected error occurred. Please try again later.')
-        print(f"Error in the download function: {e}")
+        await update.message.reply_text("Une erreur inattendue est survenue. Veuillez réessayer plus tard.")
+        print(f"Erreur dans la fonction download : {e}")
 
-# Main function to run the bot
+# Fonction principale pour lancer le bot
 def main():
-    # Create the bot using ApplicationBuilder
     application = ApplicationBuilder().token(API_TOKEN).build()
-
-    # Handled commands
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('download', download))
-
-    # Start the bot
+    application.add_handler(CallbackQueryHandler(button_handler, pattern='download_help'))
     application.run_polling()
 
 if __name__ == "__main__":
     main()
+        
